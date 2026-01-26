@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流量监控看板</title>
+    <style>
+        :root { --primary-color: #2ecc71; --bg-color: #f5f7fa; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 90%; max-width: 500px; }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 1.5rem; font-size: 1.5rem; }
+        .data-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
+        .data-row:last-child { border-bottom: none; }
+        .label { color: #7f8c8d; font-weight: 500; }
+        .value { color: #2c3e50; font-weight: bold; }
+        .status-up { color: #e74c3c; } /* 上行红色 */
+        .status-down { color: #2ecc71; } /* 下行绿色 */
+        .footer { text-align: center; font-size: 0.8rem; color: #bdc3c7; margin-top: 1.5rem; }
+        #loading { text-align: center; color: #3498db; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📊 流量使用统计</h2>
+        <div id="loading">获取数据中...</div>
+        <div id="content" style="display:none;">
+            <div class="data-row">
+                <span class="label">节点名称</span>
+                <span class="value" id="node-name">-</span>
+            </div>
+            <div class="data-row">
+                <span class="label">已上传 (Up)</span>
+                <span class="value status-up" id="up-flow">-</span>
+            </div>
+            <div class="data-row">
+                <span class="label">已下载 (Down)</span>
+                <span class="value status-down" id="down-flow">-</span>
+            </div>
+            <div class="data-row">
+                <span class="label">端口号</span>
+                <span class="value" id="port">-</span>
+            </div>
+            <div class="footer">
+                最后更新: <span id="update-time">-</span><br>
+                (每 5 分钟自动刷新)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 【关键】请在这里粘贴你 Gist 的 Raw 链接
+        const GIST_RAW_URL = 'https://gist.githubusercontent.com/Imontopofu/c6d792df42d333a4169c1aac64269351/raw/aff8ee70dda9c26a4d3011e410ec5477ff5cd757/data.json';
+
+        async function updateStats() {
+            try {
+                // 加一个随机参数防止浏览器缓存旧数据
+                const response = await fetch(GIST_RAW_URL + '?t=' + new Date().getTime());
+                const data = await response.json();
+                const item = data[0]; // 获取脚本上传的第一条数据
+
+                document.getElementById('node-name').innerText = item.name;
+                document.getElementById('up-flow').innerText = item.up;
+                document.getElementById('down-flow').innerText = item.down;
+                document.getElementById('port').innerText = item.port;
+                document.getElementById('update-time').innerText = new Date().toLocaleString();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                console.error('Fetch error:', error);
+                document.getElementById('loading').innerText = '数据加载失败，请检查 Gist 链接';
+            }
+        }
+
+        // 首次加载
+        updateStats();
+        // 之后每 5 分钟自动更新一次页面显示
+        setInterval(updateStats, 300000);
+    </script>
+</body>
+</html>
