@@ -13,8 +13,8 @@
         .data-row:last-child { border-bottom: none; }
         .label { color: #7f8c8d; font-weight: 500; }
         .value { color: #2c3e50; font-weight: bold; }
-        .status-up { color: #e74c3c; } /* 上行红色 */
-        .status-down { color: #2ecc71; } /* 下行绿色 */
+        .status-up { color: #e74c3c; } 
+        .status-down { color: #2ecc71; } 
         .footer { text-align: center; font-size: 0.8rem; color: #bdc3c7; margin-top: 1.5rem; }
         #loading { text-align: center; color: #3498db; }
     </style>
@@ -37,44 +37,60 @@
                 <span class="value status-down" id="down-flow">-</span>
             </div>
             <div class="data-row">
-                <span class="label">端口号</span>
-                <span class="value" id="port">-</span>
+                <span class="label">总计使用</span>
+                <span class="value" id="total-flow">-</span>
             </div>
             <div class="footer">
                 最后更新: <span id="update-time">-</span><br>
-                (每 5 分钟自动刷新)
+                (数据每分钟自动同步，页面 5 分钟刷新)
             </div>
         </div>
     </div>
 
     <script>
-        // 【关键】请在这里粘贴你 Gist 的 Raw 链接
-        const GIST_URL = `https://gist.githubusercontent.com/Imontopofu/71b2976b32b38918451f22df81c4e7c8/raw/xui_traffic_data.json?t=${new Date().getTime()}`;
+        // 【已修复】正确的 Gist Raw 链接，去掉了中间的版本哈希值
+        const GIST_URL = "https://gist.githubusercontent.com/Imontopofu/71b2976b32b38918451f22df81c4e7c8/raw/xui_traffic_data.json";
+
+        // 流量单位格式化函数
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
 
         async function updateStats() {
             try {
-                // 加一个随机参数防止浏览器缓存旧数据
-                const response = await fetch(GIST_RAW_URL + '?t=' + new Date().getTime());
-                const data = await response.json();
-                const item = data[0]; // 获取脚本上传的第一条数据
-
-                document.getElementById('node-name').innerText = item.name;
-                document.getElementById('up-flow').innerText = item.up;
-                document.getElementById('down-flow').innerText = item.down;
-                document.getElementById('port').innerText = item.port;
-                document.getElementById('update-time').innerText = new Date().toLocaleString();
+                // 加随机数防止缓存
+                const response = await fetch(`${GIST_URL}?t=${new Date().getTime()}`);
+                if (!response.ok) throw new Error('网络请求失败');
                 
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('content').style.display = 'block';
+                const data = await response.json();
+                // 找到第一条有效数据
+                const item = data[0]; 
+
+                if (item) {
+                    document.getElementById('node-name').innerText = item.name || '未知节点';
+                    document.getElementById('up-flow').innerText = formatBytes(item.up);
+                    document.getElementById('down-flow').innerText = formatBytes(item.down);
+                    // 如果脚本里有 total 字段就显示，没有就显示 Up+Down 的和
+                    const total = item.total || (item.up + item.down);
+                    document.getElementById('total-flow').innerText = formatBytes(total);
+                    document.getElementById('update-time').innerText = new Date().toLocaleString();
+                    
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('content').style.display = 'block';
+                }
             } catch (error) {
                 console.error('Fetch error:', error);
-                document.getElementById('loading').innerText = '数据加载失败，请检查 Gist 链接';
+                document.getElementById('loading').innerText = '数据加载失败，请检查链接或等待同步';
+                document.getElementById('loading').style.color = 'red';
             }
         }
 
-        // 首次加载
         updateStats();
-        // 之后每 5 分钟自动更新一次页面显示
+        // 每 5 分钟自动更新一次
         setInterval(updateStats, 300000);
     </script>
 </body>
