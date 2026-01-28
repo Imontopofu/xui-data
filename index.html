@@ -6,44 +6,53 @@
     <title>流量监控看板</title>
     <style>
         :root { --primary: #2ecc71; --danger: #e74c3c; --bg: #f8f9fa; --text: #2c3e50; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
-        .header { text-align: center; margin-bottom: 25px; }
-        .header h1 { font-size: 1.5rem; color: #34495e; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: var(--text); }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 1.4rem; color: #34495e; }
         
-        /* 响应式网格布局 */
         .container { 
             display: grid; 
             gap: 15px; 
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
             max-width: 1000px; 
             margin: 0 auto; 
         }
 
-        /* 卡片样式 */
         .card { 
             background: white; 
             border-radius: 12px; 
-            padding: 20px; 
+            padding: 18px; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
-            border-left: 5px solid var(--primary);
+            border-top: 4px solid var(--primary);
+            position: relative;
         }
         .node-name { 
             font-size: 1.1rem; 
             font-weight: bold; 
-            margin-bottom: 15px; 
-            padding-bottom: 10px; 
-            border-bottom: 1px solid #f1f1f1;
-            display: flex;
-            justify-content: space-between;
+            margin-bottom: 12px; 
+            padding-right: 60px; /* 为端口留出空间 */
+            word-break: break-all;
         }
-        .data-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
+        .port-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #edf2f7;
+            color: #4a5568;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            font-weight: bold;
+        }
+        .data-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; }
         .label { color: #7f8c8d; }
         .value { font-family: 'Consolas', monospace; font-weight: 600; }
         
         .up { color: var(--danger); }
         .down { color: var(--primary); }
         
-        .footer { text-align: center; margin-top: 40px; color: #bdc3c7; font-size: 0.8rem; }
+        .footer { text-align: center; margin-top: 30px; color: #bdc3c7; font-size: 0.75rem; }
         #status-msg { text-align: center; margin-top: 50px; font-weight: bold; color: #95a5a6; }
     </style>
 </head>
@@ -58,7 +67,7 @@
 
     <div class="footer">
         最后更新: <span id="update-time">-</span><br>
-        页面每 5 分钟自动刷新
+        (数据每分钟上传，页面每 5 分钟刷新)
     </div>
 
     <script>
@@ -77,7 +86,7 @@
             const nameParam = urlParams.get('name');
 
             if (!nameParam) {
-                document.getElementById('status-msg').innerText = "❌ 访问受限：缺少必要参数";
+                document.getElementById('status-msg').innerText = "❌ 访问受限：缺少参数";
                 return;
             }
 
@@ -89,11 +98,9 @@
 
                 let displayData = [];
                 if (nameParam.toLowerCase() === 'all') {
-                    // 后门：显示所有人
                     displayData = data;
                     document.getElementById('page-title').innerText = "📂 全节点概览";
                 } else {
-                    // 精确查找单个人
                     const found = data.find(i => i.name === nameParam);
                     if (found) displayData = [found];
                 }
@@ -102,10 +109,8 @@
                     displayData.forEach(item => {
                         const card = `
                             <div class="card">
-                                <div class="node-name">
-                                    <span>${item.name}</span>
-                                    <span style="color:#eee; font-size:0.7rem">LIVE</span>
-                                </div>
+                                <div class="port-badge">PORT: ${item.port || '??'}</div>
+                                <div class="node-name">${item.name}</div>
                                 <div class="data-item">
                                     <span class="label">↑ 上传 (Up)</span>
                                     <span class="value up">${formatBytes(item.up)}</span>
@@ -114,9 +119,9 @@
                                     <span class="label">↓ 下载 (Down)</span>
                                     <span class="value down">${formatBytes(item.down)}</span>
                                 </div>
-                                <div class="data-item" style="margin-top:10px; border-top:1px dashed #eee; padding-top:10px;">
-                                    <span class="label">总计流量</span>
-                                    <span class="value">${formatBytes(item.up + item.down)}</span>
+                                <div class="data-item" style="margin-top:10px; border-top:1px dashed #eee; padding-top:10px; font-size:1rem;">
+                                    <span class="label">总流量</span>
+                                    <span class="value">${formatBytes((item.up || 0) + (item.down || 0))}</span>
                                 </div>
                             </div>
                         `;
@@ -125,10 +130,10 @@
                     document.getElementById('status-msg').style.display = 'none';
                     document.getElementById('update-time').innerText = new Date().toLocaleString();
                 } else {
-                    document.getElementById('status-msg').innerText = "❌ 未找到该节点的流量信息";
+                    document.getElementById('status-msg').innerText = "❌ 未找到相关信息";
                 }
             } catch (error) {
-                document.getElementById('status-msg').innerText = "⚠️ 数据解析错误，请确认 VPS 已上传数据";
+                document.getElementById('status-msg').innerText = "⚠️ 加载失败，请确认 Gist 数据已生成";
             }
         }
 
