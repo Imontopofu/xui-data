@@ -3,57 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>流量监控看板</title>
+    <title>流量查询</title>
     <style>
         :root { --primary-color: #2ecc71; --bg-color: #f5f7fa; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 90%; max-width: 500px; }
-        h2 { text-align: center; color: #2c3e50; margin-bottom: 1.5rem; font-size: 1.5rem; }
-        .data-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; }
-        .data-row:last-child { border-bottom: none; }
-        .label { color: #7f8c8d; font-weight: 500; }
+        .container { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 90%; max-width: 400px; }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 1.5rem; font-size: 1.2rem; }
+        .data-row { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #eee; }
+        .label { color: #7f8c8d; }
         .value { color: #2c3e50; font-weight: bold; }
-        .status-up { color: #e74c3c; } 
-        .status-down { color: #2ecc71; } 
-        .footer { text-align: center; font-size: 0.8rem; color: #bdc3c7; margin-top: 1.5rem; }
-        #loading { text-align: center; color: #3498db; }
+        .up { color: #e74c3c; } 
+        .down { color: #2ecc71; }
+        .footer { text-align: center; font-size: 0.75rem; color: #bdc3c7; margin-top: 1.5rem; line-height: 1.5; }
+        #message { text-align: center; color: #95a5a6; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>📊 流量使用统计</h2>
-        <div id="loading">获取数据中...</div>
         <div id="content" style="display:none;">
-            <div class="data-row">
-                <span class="label">节点名称</span>
-                <span class="value" id="node-name">-</span>
-            </div>
-            <div class="data-row">
-                <span class="label">已上传 (Up)</span>
-                <span class="value status-up" id="up-flow">-</span>
-            </div>
-            <div class="data-row">
-                <span class="label">已下载 (Down)</span>
-                <span class="value status-down" id="down-flow">-</span>
-            </div>
-            <div class="data-row">
-                <span class="label">总计使用</span>
-                <span class="value" id="total-flow">-</span>
-            </div>
-            <div class="footer">
-                最后更新: <span id="update-time">-</span><br>
-                (数据每分钟自动同步，页面 5 分钟刷新)
-            </div>
+            <h2 id="title">📊 流量使用统计</h2>
+            <div class="data-row"><span class="label">节点</span><span class="value" id="node-name">-</span></div>
+            <div class="data-row"><span class="label">上传</span><span class="value up" id="up-flow">-</span></div>
+            <div class="data-row"><span class="label">下载</span><span class="value down" id="down-flow">-</span></div>
+            <div class="data-row"><span class="label">合计</span><span class="value" id="total-flow">-</span></div>
+            <div class="footer">更新于: <span id="update-time">-</span></div>
         </div>
+        <div id="message">正在验证身份...</div>
     </div>
 
     <script>
-        // 【已修复】正确的 Gist Raw 链接，去掉了中间的版本哈希值
         const GIST_URL = "https://gist.githubusercontent.com/Imontopofu/c6d792df42d333a4169c1aac64269351/raw/xui_traffic_data.json";
 
-        // 流量单位格式化函数
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -61,37 +43,40 @@
         }
 
         async function updateStats() {
+            // 1. 从 URL 获取 ?name= 后的参数
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetName = urlParams.get('name');
+
+            if (!targetName) {
+                document.getElementById('message').innerText = "❌ 无效请求：缺少参数";
+                return;
+            }
+
             try {
-                // 加随机数防止缓存
                 const response = await fetch(`${GIST_URL}?t=${new Date().getTime()}`);
-                if (!response.ok) throw new Error('网络请求失败');
-                
                 const data = await response.json();
-                // 找到第一条有效数据
-                const item = data[0]; 
+                
+                // 2. 在 JSON 数组中寻找名字匹配的那个人
+                const item = data.find(i => i.name === targetName);
 
                 if (item) {
-                    document.getElementById('node-name').innerText = item.name || '未知节点';
-                    document.getElementById('up-flow').innerText = formatBytes(item.up);
-                    document.getElementById('down-flow').innerText = formatBytes(item.down);
-                    // 如果脚本里有 total 字段就显示，没有就显示 Up+Down 的和
-                    const total = item.total || (item.up + item.down);
-                    document.getElementById('total-flow').innerText = formatBytes(total);
+                    document.getElementById('node-name').innerText = item.name;
+                    document.getElementById('up-flow').innerText = "↑ " + formatBytes(item.up);
+                    document.getElementById('down-flow').innerText = "↓ " + formatBytes(item.down);
+                    document.getElementById('total-flow').innerText = formatBytes(item.up + item.down);
                     document.getElementById('update-time').innerText = new Date().toLocaleString();
                     
-                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('message').style.display = 'none';
                     document.getElementById('content').style.display = 'block';
+                } else {
+                    document.getElementById('message').innerText = "❌ 身份验证失败";
                 }
             } catch (error) {
-                console.error('Fetch error:', error);
-                document.getElementById('loading').innerText = '数据加载失败，请检查链接或等待同步';
-                document.getElementById('loading').style.color = 'red';
+                document.getElementById('message').innerText = "⚠️ 服务暂时不可用";
             }
         }
 
         updateStats();
-        // 每 5 分钟自动更新一次
-        setInterval(updateStats, 300000);
     </script>
 </body>
 </html>
