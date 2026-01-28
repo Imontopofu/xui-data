@@ -3,32 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>流量查询</title>
+    <title>流量监控看板</title>
     <style>
-        :root { --primary-color: #2ecc71; --bg-color: #f5f7fa; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-color); margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 90%; max-width: 400px; }
-        h2 { text-align: center; color: #2c3e50; margin-bottom: 1.5rem; font-size: 1.2rem; }
-        .data-row { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #eee; }
+        :root { --primary: #2ecc71; --danger: #e74c3c; --bg: #f8f9fa; --text: #2c3e50; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { font-size: 1.5rem; color: #34495e; }
+        
+        /* 响应式网格布局 */
+        .container { 
+            display: grid; 
+            gap: 15px; 
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            max-width: 1000px; 
+            margin: 0 auto; 
+        }
+
+        /* 卡片样式 */
+        .card { 
+            background: white; 
+            border-radius: 12px; 
+            padding: 20px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+            border-left: 5px solid var(--primary);
+        }
+        .node-name { 
+            font-size: 1.1rem; 
+            font-weight: bold; 
+            margin-bottom: 15px; 
+            padding-bottom: 10px; 
+            border-bottom: 1px solid #f1f1f1;
+            display: flex;
+            justify-content: space-between;
+        }
+        .data-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }
         .label { color: #7f8c8d; }
-        .value { color: #2c3e50; font-weight: bold; }
-        .up { color: #e74c3c; } 
-        .down { color: #2ecc71; }
-        .footer { text-align: center; font-size: 0.75rem; color: #bdc3c7; margin-top: 1.5rem; line-height: 1.5; }
-        #message { text-align: center; color: #95a5a6; }
+        .value { font-family: 'Consolas', monospace; font-weight: 600; }
+        
+        .up { color: var(--danger); }
+        .down { color: var(--primary); }
+        
+        .footer { text-align: center; margin-top: 40px; color: #bdc3c7; font-size: 0.8rem; }
+        #status-msg { text-align: center; margin-top: 50px; font-weight: bold; color: #95a5a6; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="content" style="display:none;">
-            <h2 id="title">📊 流量使用统计</h2>
-            <div class="data-row"><span class="label">节点</span><span class="value" id="node-name">-</span></div>
-            <div class="data-row"><span class="label">上传</span><span class="value up" id="up-flow">-</span></div>
-            <div class="data-row"><span class="label">下载</span><span class="value down" id="down-flow">-</span></div>
-            <div class="data-row"><span class="label">合计</span><span class="value" id="total-flow">-</span></div>
-            <div class="footer">更新于: <span id="update-time">-</span></div>
-        </div>
-        <div id="message">正在验证身份...</div>
+
+    <div class="header">
+        <h1 id="page-title">📊 流量数据查询</h1>
+    </div>
+
+    <div id="status-msg">正在验证数据...</div>
+    <div id="main-container" class="container"></div>
+
+    <div class="footer">
+        最后更新: <span id="update-time">-</span><br>
+        页面每 5 分钟自动刷新
     </div>
 
     <script>
@@ -43,40 +73,67 @@
         }
 
         async function updateStats() {
-            // 1. 从 URL 获取 ?name= 后的参数
             const urlParams = new URLSearchParams(window.location.search);
-            const targetName = urlParams.get('name');
+            const nameParam = urlParams.get('name');
 
-            if (!targetName) {
-                document.getElementById('message').innerText = "❌ 无效请求：缺少参数";
+            if (!nameParam) {
+                document.getElementById('status-msg').innerText = "❌ 访问受限：缺少必要参数";
                 return;
             }
 
             try {
                 const response = await fetch(`${GIST_URL}?t=${new Date().getTime()}`);
                 const data = await response.json();
-                
-                // 2. 在 JSON 数组中寻找名字匹配的那个人
-                const item = data.find(i => i.name === targetName);
+                const container = document.getElementById('main-container');
+                container.innerHTML = '';
 
-                if (item) {
-                    document.getElementById('node-name').innerText = item.name;
-                    document.getElementById('up-flow').innerText = "↑ " + formatBytes(item.up);
-                    document.getElementById('down-flow').innerText = "↓ " + formatBytes(item.down);
-                    document.getElementById('total-flow').innerText = formatBytes(item.up + item.down);
-                    document.getElementById('update-time').innerText = new Date().toLocaleString();
-                    
-                    document.getElementById('message').style.display = 'none';
-                    document.getElementById('content').style.display = 'block';
+                let displayData = [];
+                if (nameParam.toLowerCase() === 'all') {
+                    // 后门：显示所有人
+                    displayData = data;
+                    document.getElementById('page-title').innerText = "📂 全节点概览";
                 } else {
-                    document.getElementById('message').innerText = "❌ 身份验证失败";
+                    // 精确查找单个人
+                    const found = data.find(i => i.name === nameParam);
+                    if (found) displayData = [found];
+                }
+
+                if (displayData.length > 0) {
+                    displayData.forEach(item => {
+                        const card = `
+                            <div class="card">
+                                <div class="node-name">
+                                    <span>${item.name}</span>
+                                    <span style="color:#eee; font-size:0.7rem">LIVE</span>
+                                </div>
+                                <div class="data-item">
+                                    <span class="label">↑ 上传 (Up)</span>
+                                    <span class="value up">${formatBytes(item.up)}</span>
+                                </div>
+                                <div class="data-item">
+                                    <span class="label">↓ 下载 (Down)</span>
+                                    <span class="value down">${formatBytes(item.down)}</span>
+                                </div>
+                                <div class="data-item" style="margin-top:10px; border-top:1px dashed #eee; padding-top:10px;">
+                                    <span class="label">总计流量</span>
+                                    <span class="value">${formatBytes(item.up + item.down)}</span>
+                                </div>
+                            </div>
+                        `;
+                        container.innerHTML += card;
+                    });
+                    document.getElementById('status-msg').style.display = 'none';
+                    document.getElementById('update-time').innerText = new Date().toLocaleString();
+                } else {
+                    document.getElementById('status-msg').innerText = "❌ 未找到该节点的流量信息";
                 }
             } catch (error) {
-                document.getElementById('message').innerText = "⚠️ 服务暂时不可用";
+                document.getElementById('status-msg').innerText = "⚠️ 数据解析错误，请确认 VPS 已上传数据";
             }
         }
 
         updateStats();
+        setInterval(updateStats, 300000);
     </script>
 </body>
 </html>
